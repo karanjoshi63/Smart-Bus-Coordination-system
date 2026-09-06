@@ -7,8 +7,7 @@ Smart bus scheduling system in C++ using OOP &amp; DSA to reduce student wait ti
 
 Our university's bus service operates on only three fixed departure 
 times — **1:00 PM, 4:00 PM, and 6:00 PM**. However, class schedules 
-vary significantly across sections, with some classes ending as early 
-as 02.00 PM and others extending well into the afternoon.
+vary significantly across sections.
 
 This mismatch causes major issues for students:
 **Departure wastage** — A student whose class ends at 2:00 PM has 
