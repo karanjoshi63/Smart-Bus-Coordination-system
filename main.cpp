@@ -1,6 +1,10 @@
 #include <iostream>
 
 #include "Bus.h"
+#include "OnDemandBus.h"
+#include "Request.h"
+#include "Stack.h"
+#include "Stop.h"
 #include "Section.h"
 #include "TimeUtils.h"
 #include "BusMatcher.h"
@@ -10,12 +14,15 @@ using namespace std;
 
 const int MAX_SECTIONS = 100;
 
+const int Stop_count = 8;
+const int Threshold = 3;
+
 int main()
 {
 
     int busCount = 3;
 
-    Bus buses[3] ={Bus(1080), Bus(780), Bus(960) };
+    Bus buses[3] ={Bus(1090), Bus(790), Bus(970) };
 
 
     sortBuses(buses, busCount);
@@ -24,18 +31,35 @@ int main()
 
     int sectionCount = loadTimetable(sections, MAX_SECTIONS);
 
+    Stop stops[Stop_count] = {
+    Stop("Rispana"), Stop("Premnagar"), Stop("Doiwala"), Stop("Rajpur"),
+    Stop("IT Park"), Stop("Clock Tower"),
+    Stop("Ranipokhri"), Stop("Vikasnagar")
+
+};
+Stack history;
+
 
     int choice = -1;
 
     while(choice != 0)
     {
-        cout << "---- MENU -----" << endl;
+        cout << "\n============================================" << endl;
+        cout << "          SMART BUS COORDINATION SYSTEM     " << endl;
+        cout << "============================================" << endl;
 
-        cout << "1. Show timetable with next bus for all sections" << endl;
-        cout << "2. Find next bus for a section" << endl;
-        cout << "3. Find next bus for any time" << endl;
-        cout << "0. Exit" << endl;
+        cout << "\n------------------- MENU -------------------" << endl;
 
+        cout <<"  1. Show timetable with next bus for all sections" << endl;
+        cout <<"  2. Find next bus for a section" << endl;
+        cout <<"  3. Find next bus for any time" << endl;
+        cout <<"  4. Student bus request" << endl;
+        cout <<"  5. Show students going to each stop" << endl;
+        cout <<"  6. Check a stop (threshold)" << endl;
+        cout<<"   7.undo last request"<<endl;
+        cout <<"  0. Exit" << endl;
+
+        cout << "--------------------------------------------" << endl;
         cout << "Enter choice: ";
         cin >> choice;
 
@@ -43,26 +67,32 @@ int main()
 
         if(choice == 1)
         {
+            cout << "\n============== TIMETABLE DETAILS ==============\n" << endl;
+
             for(int i = 0; i < sectionCount; i++)
             {
                 int bus = findNextBus( buses,busCount,sections[i].getEndTime());
 
-                cout << sections[i].getName()<< " - "<< sections[i].getDay()<< " ends at ";
+                cout << "\n--------------------------------------------" << endl;
+                cout << "Section: " << sections[i].getName()<< " | Day: "<< sections[i].getDay()<< endl;
+                cout << "Class ends at: ";
 
                 printTime(sections[i].getEndTime());
 
 
                 if(bus == -1)
                 {
-                    cout << " no bus left today" << endl;
+                    cout << "No bus left today" << endl;
                 }
                 else
                 {
-                    cout << " next bus at ";
+                    cout << " Next bus at: ";
                     printTime(bus);
                     cout << endl;
                 }
             }
+
+            cout << "\n============================================" << endl;
         }
 
 
@@ -70,6 +100,8 @@ int main()
         {
             char name[20];
             char day[10];
+
+            cout << "\n============== FIND NEXT BUS ==============\n" << endl;
 
             cout << "Enter your section (like A or ML1 ): ";
             cin >> name;
@@ -83,7 +115,7 @@ int main()
 
             if(position == -1)
             {
-                cout << "Section not found in the timetable"<< endl;
+                cout << "\nSection not found in the timetable"<< endl;
             }
             else
             {
@@ -92,9 +124,10 @@ int main()
                 int bus = findNextBus(buses, busCount, endTime);
 
 
-                cout << "\nYour section: " << sections[position].getName()<< endl;
+                cout << "\n--------------- SECTION DETAILS ---------------" << endl;
+                cout << "Your section: " << sections[position].getName()<< endl;
                 cout << "Day: "<< sections[position].getDay() << endl;
-                cout << "Your class ends at ";
+                cout << "Your class ends at: ";
                 printTime(endTime);
                 cout << endl;
 
@@ -105,26 +138,27 @@ int main()
                 }
                 else
                 {
-                    cout << "Your next bus is at ";
+                    cout << "Your next bus is at: ";
 
                     printTime(bus);
 
                     cout << endl;
 
-                    cout << "You will wait "<< bus - endTime << " minutes" << endl;
+                    cout << "Waiting time: " << bus - endTime << " minutes" << endl;
                 }
 
-                cout<<endl;
+                cout << "----------------------------------------------" << endl;
+                cout << endl;
             }
         }
 
-
-      
 
         else if(choice == 3)
         {
             int hour;
             int minute;
+
+            cout << "\n============== FIND BUS BY TIME ==============\n" << endl;
 
             cout << "Enter hour (24 hour format, like 14 for 2 PM): ";
             cin >> hour;
@@ -141,11 +175,11 @@ int main()
 
             if(bus == -1)
             {
-                cout << "No bus left today" << endl;
+                cout << "\nNo bus left today" << endl;
             }
             else
             {
-                cout << "Next bus at ";
+                cout << "\nNext bus at: ";
 
                 printTime(bus);
 
@@ -153,15 +187,216 @@ int main()
             }
         }
 
+        else if(choice == 4)
+        {
+            char studentName[20];
+            char sectionName[20];
 
-      
+            char day[10];
+            int stopNumber;
+
+            cout << "\n============== STUDENT BUS REQUEST ==============\n" << endl;
+
+            cout << "Enter your name: ";
+            cin >> studentName;
+            cout << "Enter your section: ";
+            cin >> sectionName;
+            cout << "Enter day: ";
+            cin >> day;
+
+            int position = findSection(sections, sectionCount, sectionName, day);
+
+            if(position == -1)
+            {
+                cout << "\nSection not found in the timetable" << endl;
+            }
+
+            else
+            {
+                cout << "\nWhere do you want to go? " << endl;
+                cout << "--------------------------------------------" << endl;
+
+                for(int i = 0; i<Stop_count; i++)
+                {
+                    cout << i+1 << ". " << stops[i].getName() << endl;
+                }
+
+                cout << "--------------------------------------------" << endl;
+                cout << "Enter stop number: ";
+                cin >> stopNumber;
+
+                if(stopNumber<1 || stopNumber>Stop_count)
+                {
+                    cout << "Wrong stop number" << endl;
+                }
+
+                else
+                {
+                    Student student(studentName, stops[stopNumber-1].getName());
+                    Request request(student, sections[position].getEndTime());
+
+                    if(stops[stopNumber -1].addRequest(request))
+                    {
+                        cout << "\nRequest added successfully for " << stops[stopNumber-1].getName() << endl;
+                    }
+
+                    else
+                    {
+                        cout << "Queue is full" << endl;
+                    }
+
+                }
+            }
+        }
+
+        else if(choice == 5)
+        {
+            cout << "\n============== STUDENTS AT EACH STOP ==============\n" << endl;
+
+            for(int i = 0; i<Stop_count; i++)
+            {
+                cout << "\nStop: " << stops[i].getName() << endl;
+                cout << "Students waiting: " << stops[i].getWaitingCount() << endl;
+                cout << "--------------------------------------------" << endl;
+
+                for(int j = 0; j<stops[i].getWaitingCount(); j++)
+                {
+                    cout << stops[i].getWaiting(j).getStudentName() << endl;
+
+                }
+            }
+
+            cout << "\n============================================" << endl;
+        }
+
+        else if(choice == 6)
+        {
+            int stopNumber;
+
+            cout << "\n============== STOP THRESHOLD CHECK ==============\n" << endl;
+
+            cout << "Enter stop number (1-" << Stop_count << "): ";
+            cin >> stopNumber;
+
+            if(stopNumber<1 || stopNumber >Stop_count)
+            {
+                cout << "Wrong stop number" << endl;
+            }
+
+            else
+            {
+                Stop &stop = stops[stopNumber-1];
+                int total = stop.getWaitingCount();
+
+                cout << "\nStudents waiting: " << total << endl;
+                cout << "Stop name: " << stop.getName() << endl;
+                cout << "Required threshold: " << Threshold << endl;
+                cout << "--------------------------------------------" << endl;
+
+                if(total == 0)
+                {
+                    cout << "Nobody wants to go here" << endl;
+                }
+
+                else if(total>=Threshold)
+                {
+                    int latest = 0;
+                    for(int i = 0; i<total; i++)
+                    {
+                        if(stop.getWaiting(i).getClassEndTime() > latest)
+                        {
+                            latest = stop.getWaiting(i).getClassEndTime();
+                        }
+                    }
+
+                    OnDemandBus extraBus(latest);
+                    Bus *busPointer = &extraBus;
+                    busPointer->showInfo();
+
+                    cout << "\nStudents boarding the bus:" << endl;
+
+                    while(stop.getWaitingCount()>0)
+                    {
+                        Request r = stop.removeFirst();
+                        cout << "  " << r.getStudentName() << " boards the bus" << endl;
+                    }
+
+                }
+
+                else
+                {
+                    cout << "Not enough students, so everyone takes the fixed bus:" << endl;
+                    cout << "--------------------------------------------" << endl;
+
+                    for(int i = 0; i<total; i++)
+                    {
+                        Request r = stop.getWaiting(i);
+                        int bus = findNextBus(buses,busCount,r.getClassEndTime());
+
+                        cout << r.getStudentName() << " -> ";
+
+                        if(bus == -1)
+                        {
+                            cout << "No bus left today" << endl;
+                        }
+
+                        else
+                        {
+                            printTime(bus);
+                            cout << endl;
+                        }
+                    }
+                }
+            }
+        }
+
+        else if(choice == 7)
+        {
+            if(history.isEmpty())
+            {
+                cout << "Nothing to undo" << endl;
+            }
+            else
+            {
+                Request last = history.pop();
+                bool removed = false;
+
+                for(int i = 0; i < Stop_count; i++)
+                {
+                    if(strcmp(stops[i].getName(), last.getStopName()) == 0)
+                    {
+                        int total = stops[i].getWaitingCount();
+
+                  
+                        if(total > 0 && strcmp(stops[i].getLast().getStudentName(), last.getStudentName()) == 0)
+                        {
+                            stops[i].removeLast();
+                            removed = true;
+                        }
+                    }
+                }
+
+                if(removed)
+                {
+                    cout << "Undo done, request of " << last.getStudentName() << " is removed" << endl;
+                }
+                else
+                {
+                    cout << "Cannot undo, this student already boarded the bus" << endl;
+                }
+            }
+        }
+
+
         else if(choice != 0)
         {
-            cout << "Invalid choice!" << endl;
+            cout << "\nInvalid choice! Please enter a valid option." << endl;
         }
     }
 
-
+    cout << "\n============================================" << endl;
+    cout << "       Thank you for using our system!      " << endl;
+    cout << "============================================" << endl;
 
     return 0;
 }
