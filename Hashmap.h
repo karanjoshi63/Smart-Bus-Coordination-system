@@ -24,7 +24,8 @@ private:
         int h = 0;
         for(int i = 0; key[i] != '\0'; i++)
         {
-            h = (h * 31 + key[i]) % HASH_SIZE;
+            // unsigned char: a letter like 'e with accent' is a negative char and would give a negative slot
+            h = (h * 31 + (unsigned char)key[i]) % HASH_SIZE;
         }
         return h;
     }
