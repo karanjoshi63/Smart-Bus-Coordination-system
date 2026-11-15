@@ -1,11 +1,13 @@
+#ifndef BUS_H
 #define BUS_H
 
 #include <iostream>
 #include "TimeUtils.h"
 using namespace std;
+
 class Bus
 {
-    private:
+    protected:
     int departureTime;
 
     public:
