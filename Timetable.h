@@ -5,6 +5,7 @@
 #include <fstream>
 #include <cstring>
 #include "Section.h"
+#include "TimeUtils.h"
 
 using namespace std;
 
@@ -12,7 +13,6 @@ int loadTimetable(Section sections[], int maxcount)
 {
     ifstream file("timetable.txt");
    
-
     if(!file)
     {
         cout << "timetable.txt not found" << endl;
@@ -38,12 +38,11 @@ int loadTimetable(Section sections[], int maxcount)
     return count;
 }
 
-
-int findSection(Section sections[], int count,const char name[], const char day[])
+int findSection(Section sections[], int count, const char name[], const char day[])
 {
     for(int i = 0; i < count; i++)
     {
-        if(strcmp(sections[i].getName(), name) == 0 && strcmp(sections[i].getDay(), day) == 0)
+        if(equalsIgnoreCase(sections[i].getName(), name) && equalsIgnoreCase(sections[i].getDay(), day))
         {
             return i;
         }
