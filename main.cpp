@@ -8,12 +8,16 @@
 
 #include "Bus.h"
 #include "OnDemandBus.h"
-#include "HashMap.h"
+#include "Hashmap.h"
 #include "RouteGraph.h"
 #include "Section.h"
 #include "TimeUtils.h"
 #include "BusMatcher.h"
 #include "Timetable.h"
+
+#include "InputUtils.h"
+#include "Corridor.h"
+#include "Dispatch.h"
 
 using namespace std;
 
@@ -21,6 +25,63 @@ const int MAX_SECTIONS = 100;
 
 const int Stop_count = 80;
 const int Threshold = 3;
+
+// prints the names of all the stops (no numbers) in 3 columns
+void showStopNames(Stop stops[], int count)
+{
+    cout << "\nAvailable stops:" << endl;
+
+    for(int i = 0; i < count; i++)
+    {
+        const char *stopName = stops[i].getName();
+        cout << "  " << stopName;
+
+        for(int k = (int)strlen(stopName); k < 22; k++)
+        {
+            cout << ' ';
+        }
+
+        if((i + 1) % 3 == 0)
+        {
+            cout << endl;
+        }
+    }
+
+    cout << endl;
+}
+
+// asks for a stop NAME (like "miyawala" or "Clock Tower"), upper/lower case does not matter
+// typing ? shows all the stop names
+// returns the position of the stop in the stops array, or -1 if there is no such stop
+int askForStop(Stop stops[], int count, const char prompt[])
+{
+    char text[40];
+
+    while(true)
+    {
+        readLine(prompt, text, 40);
+
+        if(inputEnded)
+        {
+            return -1;
+        }
+
+        if(strcmp(text, "?") == 0 || equalsIgnoreCase(text, "list"))
+        {
+            showStopNames(stops, count);
+            continue;
+        }
+
+        int position = findStopByName(stops, count, text);
+
+        if(position == -1)
+        {
+            cout << "\nStop \"" << text << "\" not found. Type ? at the stop prompt to see all stops." << endl;
+        }
+
+        return position;
+    }
+}
 
 int main()
 {
@@ -77,18 +138,21 @@ int main()
 
 
 
-Stack history;
+    Stack history;
 
-RouteGraph routeGraph;
+    RouteGraph routeGraph;
+    routeGraph.loadRoutes();
 
-routeGraph.loadRoutes();
+    int universityId = routeGraph.findStop("GEU");
 
-int universityId = routeGraph.findStop("GEU");
-
+    // route corridors: stops grouped in sequence along the same physical road
+    CorridorMap corridorMap;
+    corridorMap.loadCorridors();
+    checkCorridorStops(corridorMap, stops, Stop_count);
 
     int choice = -1;
 
-    while(choice != 0)
+    while(choice != 0 && !inputEnded)
     {
         cout << "\n============================================" << endl;
         cout << "          SMART BUS COORDINATION SYSTEM     " << endl;
@@ -109,10 +173,12 @@ int universityId = routeGraph.findStop("GEU");
         cout <<"  0. Exit" << endl;
 
         cout << "--------------------------------------------" << endl;
-        cout << "Enter choice: ";
-        cin >> choice;
+        choice = readInt("Enter choice: ");
 
-
+        if(inputEnded)
+        {
+            break;
+        }
 
         if(choice == 1)
         {
@@ -152,15 +218,8 @@ int universityId = routeGraph.findStop("GEU");
 
             cout << "\n============== FIND NEXT BUS ==============\n" << endl;
 
-            cout << "Enter your section (like A or ML1 ): ";
-            cin >> name;
-             fixSectionName(name);
-
-          
-
-            cout << "Enter day (like Monday): ";
-            cin >> day;
-            fixDay(day);
+            readLine("Enter your section (like A or ML1, any case): ", name, 20);
+            readLine("Enter day (like Monday, any case): ", day, 10);
 
 
             int position = findSectionFast(sectionMap, name, day);
@@ -208,35 +267,41 @@ int universityId = routeGraph.findStop("GEU");
 
         else if(choice == 3)
         {
-            int hour;
-            int minute;
+            char timeText[20];
 
             cout << "\n============== FIND BUS BY TIME ==============\n" << endl;
 
-            cout << "Enter hour (24 hour format, like 14 for 2 PM): ";
-            cin >> hour;
+            readLine("Enter time (like 2:30 PM or 11:05 AM): ", timeText, 20);
 
-            cout << "Enter minutes: ";
-            cin >> minute;
+            int givenTime = parseTime12(timeText);
 
-
-            int givenTime = hour * 60 + minute;
-
-
-            int bus = findNextBus(buses,busCount,givenTime );
-
-
-            if(bus == -1)
+            if(givenTime == -1)
             {
-                cout << "\nNo bus left today" << endl;
+                if(!inputEnded)
+                {
+                    cout << "\nInvalid time. Write it like 2:30 PM or 11:05 AM" << endl;
+                }
             }
             else
             {
-                cout << "\nNext bus at: ";
-
-                printTime(bus);
-
+                cout << "\nTime entered: ";
+                printTime(givenTime);
                 cout << endl;
+
+                int bus = findNextBus(buses,busCount,givenTime );
+
+                if(bus == -1)
+                {
+                    cout << "No bus left today" << endl;
+                }
+                else
+                {
+                    cout << "Next bus at: ";
+
+                    printTime(bus);
+
+                    cout << endl;
+                }
             }
         }
 
@@ -246,62 +311,44 @@ int universityId = routeGraph.findStop("GEU");
             char sectionName[20];
 
             char day[10];
-            int stopNumber;
 
             cout << "\n============== STUDENT BUS REQUEST ==============\n" << endl;
 
-            cout << "Enter your name: ";
-            cin >> studentName;
-            
-            cout << "Enter your section: ";
-            cin >> sectionName;
-            fixSectionName(sectionName);
-            cout << "Enter day: ";
-            cin >> day;
-            fixDay(day);
+            readLine("Enter your name: ", studentName, 20);
+            readLine("Enter your section (any case): ", sectionName, 20);
+            readLine("Enter day (any case): ", day, 10);
 
             int position = findSectionFast(sectionMap, sectionName, day);
 
             if(position == -1)
             {
-                cout << "\nSection not found in the timetable" << endl;
+                if(!inputEnded)
+                {
+                    cout << "\nSection not found in the timetable" << endl;
+                }
             }
 
             else
             {
-                cout << "\nWhere do you want to go? " << endl;
-                cout << "--------------------------------------------" << endl;
+                cout << "\nWhere do you want to go? (type the stop name, or ? to see all stops)" << endl;
 
-                for(int i = 0; i<Stop_count; i++)
+                int stopIndex = askForStop(stops, Stop_count, "Enter stop name: ");
+
+                if(stopIndex != -1)
                 {
-                    cout << i+1 << ". " << stops[i].getName() << endl;
-                }
-
-                cout << "--------------------------------------------" << endl;
-                cout << "Enter stop number: ";
-                cin >> stopNumber;
-
-                if(stopNumber<1 || stopNumber>Stop_count)
-                {
-                    cout << "Wrong stop number" << endl;
-                }
-
-                else
-                {
-                    Student student(studentName, stops[stopNumber-1].getName());
+                    Student student(studentName, stops[stopIndex].getName());
                     Request request(student, sections[position].getEndTime());
 
-                    if(stops[stopNumber -1].addRequest(request))
+                    if(stops[stopIndex].addRequest(request))
                     {
                         history.push(request);
-                        cout << "\nRequest added successfully for " << stops[stopNumber-1].getName() << endl;
+                        cout << "\nRequest added successfully for " << stops[stopIndex].getName() << endl;
                     }
 
                     else
                     {
                         cout << "Queue is full" << endl;
                     }
-
                 }
             }
         }
@@ -328,81 +375,38 @@ int universityId = routeGraph.findStop("GEU");
 
         else if(choice == 6)
         {
-            int stopNumber;
-
             cout << "\n============== STOP THRESHOLD CHECK ==============\n" << endl;
 
-            cout << "Enter stop number (1-" << Stop_count << "): ";
-            cin >> stopNumber;
+            int stopIndex = askForStop(stops, Stop_count, "Enter stop name (or ? to see all stops): ");
 
-            if(stopNumber<1 || stopNumber >Stop_count)
+            if(stopIndex != -1)
             {
-                cout << "Wrong stop number" << endl;
-            }
+                const char *stopName = stops[stopIndex].getName();
 
-            else
-            {
-                Stop &stop = stops[stopNumber-1];
-                int total = stop.getWaitingCount();
+                cout << "\nStop checked: " << stopName << endl;
 
-                cout << "\nStudents waiting: " << total << endl;
-                cout << "Stop name: " << stop.getName() << endl;
-                cout << "Required threshold: " << Threshold << endl;
+                // all the stops of the same corridor are counted together
+                int candidates = 0;
+                int best = pickBestCorridor(corridorMap, stopName, stops, Stop_count, candidates);
+
+                if(candidates > 1)
+                {
+                    cout << stopName << " is on " << candidates
+                         << " corridors, using the one with the most waiting students." << endl;
+                }
+
                 cout << "--------------------------------------------" << endl;
 
-                if(total == 0)
+                if(best == -1)
                 {
-                    cout << "Nobody wants to go here" << endl;
+                    // a stop that is on no corridor is checked alone
+                    Corridor single(stopName);
+                    single.addStop(stopName);
+                    checkCorridorThreshold(single, stops, Stop_count, buses, busCount, Threshold);
                 }
-
-                else if(total>=Threshold)
-                {
-                    int latest = 0;
-                    for(int i = 0; i<total; i++)
-                    {
-                        if(stop.getWaiting(i).getClassEndTime() > latest)
-                        {
-                            latest = stop.getWaiting(i).getClassEndTime();
-                        }
-                    }
-
-                    OnDemandBus extraBus(latest);
-                    Bus *busPointer = &extraBus;
-                    busPointer->showInfo();
-
-                    cout << "\nStudents boarding the bus:" << endl;
-
-                    while(stop.getWaitingCount()>0)
-                    {
-                        Request r = stop.removeFirst();
-                        cout << "  " << r.getStudentName() << " boards the bus" << endl;
-                    }
-
-                }
-
                 else
                 {
-                    cout << "Not enough students, so everyone takes the fixed bus:" << endl;
-                    cout << "--------------------------------------------" << endl;
-
-                    for(int i = 0; i<total; i++)
-                    {
-                        Request r = stop.getWaiting(i);
-                        int bus = findNextBus(buses,busCount,r.getClassEndTime());
-
-                        cout << r.getStudentName() << " -> ";
-
-                        if(bus == -1)
-                        {
-                            cout << "No bus left today" << endl;
-                        }
-
-                        else
-                        {
-                            printTime(bus);
-                            cout << endl;
-                        }
-                    }
+                    checkCorridorThreshold(corridorMap.get(best), stops, Stop_count, buses, busCount, Threshold);
                 }
             }
         }
@@ -468,24 +472,15 @@ int universityId = routeGraph.findStop("GEU");
             }
         }
 
-          else if(choice == 9)
+        else if(choice == 9)
         {
-            int stopNumber;
+            cout << "\n============== SHORTEST ROUTE TO A STOP ==============\n" << endl;
 
-            cout << "Choose the stop:" << endl;
-            for(int i = 0; i < Stop_count; i++)
-            {
-                cout << i + 1 << ". " << stops[i].getName() << endl;
-            }
-            cin >> stopNumber;
+            int stopIndex = askForStop(stops, Stop_count, "Enter stop name (or ? to see all stops): ");
 
-            if(stopNumber < 1 || stopNumber > Stop_count)
+            if(stopIndex != -1)
             {
-                cout << "Wrong stop number" << endl;
-            }
-            else
-            {
-                int stopId = routeGraph.findStop(stops[stopNumber - 1].getName());
+                int stopId = routeGraph.findStop(stops[stopIndex].getName());
 
                 if(stopId == -1)
                 {
