@@ -1,10 +1,15 @@
 #include <iostream>
+#include <cstring>
+
+#include "Request.h"
+#include "Queue.h"
+#include "Stack.h"
+#include "Stop.h"
 
 #include "Bus.h"
 #include "OnDemandBus.h"
-#include "Request.h"
-#include "Stack.h"
-#include "Stop.h"
+#include "HashMap.h"
+#include "RouteGraph.h"
 #include "Section.h"
 #include "TimeUtils.h"
 #include "BusMatcher.h"
@@ -14,7 +19,7 @@ using namespace std;
 
 const int MAX_SECTIONS = 100;
 
-const int Stop_count = 8;
+const int Stop_count = 80;
 const int Threshold = 3;
 
 int main()
@@ -30,14 +35,55 @@ int main()
     Section sections[MAX_SECTIONS];
 
     int sectionCount = loadTimetable(sections, MAX_SECTIONS);
+    HashMap sectionMap;
+    buildSectionMap(sections, sectionCount, sectionMap);
 
+    // Spelling differences from the chart (Kargi Chowk, Miawala, 6 No. Pulia...) are handled in Stop.h
     Stop stops[Stop_count] = {
-    Stop("Rispana"), Stop("Premnagar"), Stop("Doiwala"), Stop("Rajpur"),
-    Stop("IT Park"), Stop("Clock Tower"),
-    Stop("Ranipokhri"), Stop("Vikasnagar")
+        // ISBT / Clock Tower side
+        Stop("ISBT"), Stop("Matawala Bagh"), Stop("Saharanpur Chowk"), Stop("Darshanlal Chowk"),
+        Stop("Clock Tower"), Stop("Astley Hall"),
+        // Kargi / Daudwala side
+        Stop("Kargi"), Stop("Bangali Kothi"), Stop("Vishnupuram"), Stop("Mathurawala"), Stop("Daudwala"),
+        // Rispana / Doiwala side
+        Stop("Rispana"), Stop("Jogiwala"), Stop("Mokhampur"), Stop("Miyawala"), Stop("Harrawala"),
+        Stop("Kuanwala"), Stop("Lachiwala"), Stop("Doiwala"), Stop("Laal Tappad"), Stop("Nepali Farm"),
+        Stop("Ranipokhri"), Stop("Nakrounda More"),
+        // Raipur side
+        Stop("Nehrugram"), Stop("Ring Road"), Stop("6 No. Puliya"), Stop("Dobhal Chowk"),
+        Stop("Raipur"), Stop("Gujrowali"),
+        // GMS Road / Garhi Cantt side
+        Stop("GMS Road"), Stop("Ballupur"), Stop("ONGC Chowk"), Stop("Garhi Cantt"), Stop("CM House"),
+        Stop("Chir Bagh"), Stop("Vijay Colony"), Stop("Hathibarkala"),
+        // Rajender Nagar side
+        Stop("Blood Bank"), Stop("Kishan Nagar"), Stop("Bindal Pul"), Stop("Yamuna Colony"), Stop("Rajender Nagar"),
+        // IT Park side
+        Stop("Nehru Colony"), Stop("Fountain Chowk"), Stop("Laadpur"), Stop("Sahastradhara"),
+        Stop("Nala Paani Chowk"), Stop("IT Park"), Stop("Khirsali Chowk"),
+        // Dharampur side
+        Stop("Mata Mandir"), Stop("Dharampur"), Stop("Balbir Road"), Stop("Race Course"),
+        // Shimla Bypass side
+        Stop("Mehuwala"), Stop("Telpur"), Stop("Badowala"), Stop("Naya Gaon Palio"), Stop("Kulhal"),
+        // Rajpur side
+        Stop("Araghar"), Stop("Dwarka Store"), Stop("Survey Chowk"), Stop("Nanni Bakery"),
+        Stop("Dilaram Bazar"), Stop("Great Value"), Stop("Rajpur"),
+        // Premnagar / Vikasnagar side
+        Stop("Balliwala Chowk"), Stop("Vasant Vihar"), Stop("Panditwari"), Stop("Premnagar"),
+        Stop("Nanda Ki Chowki"), Stop("Sudhowala"), Stop("Selaqui"), Stop("Sahaspur"), Stop("Langa Road"),
+        Stop("Herbertpur"), Stop("Tehsil"), Stop("Vikasnagar"),
+        // Rajawala side
+        Stop("Manduwala"), Stop("Bahuwala"), Stop("Rajawala")
+    };
 
-};
+
+
 Stack history;
+
+RouteGraph routeGraph;
+
+routeGraph.loadRoutes();
+
+int universityId = routeGraph.findStop("GEU");
 
 
     int choice = -1;
@@ -56,7 +102,10 @@ Stack history;
         cout <<"  4. Student bus request" << endl;
         cout <<"  5. Show students going to each stop" << endl;
         cout <<"  6. Check a stop (threshold)" << endl;
-        cout<<"   7.undo last request"<<endl;
+        cout <<"  7.undo last request"<<endl;
+        cout <<"  8. show hash map information"<<endl;
+        cout <<"  9. show shortest route to a stop"<<endl;
+        cout <<"  10. show route network"<<endl;
         cout <<"  0. Exit" << endl;
 
         cout << "--------------------------------------------" << endl;
@@ -105,12 +154,16 @@ Stack history;
 
             cout << "Enter your section (like A or ML1 ): ";
             cin >> name;
+             fixSectionName(name);
+
+          
 
             cout << "Enter day (like Monday): ";
             cin >> day;
+            fixDay(day);
 
 
-            int position = findSection( sections,sectionCount,name,day);
+            int position = findSectionFast(sectionMap, name, day);
 
 
             if(position == -1)
@@ -203,8 +256,9 @@ Stack history;
             cin >> sectionName;
             cout << "Enter day: ";
             cin >> day;
+            fixDay(day);
 
-            int position = findSection(sections, sectionCount, sectionName, day);
+            int position = findSectionFast(sectionMap, sectionName, day);
 
             if(position == -1)
             {
@@ -237,6 +291,7 @@ Stack history;
 
                     if(stops[stopNumber -1].addRequest(request))
                     {
+                        history.push(request);
                         cout << "\nRequest added successfully for " << stops[stopNumber-1].getName() << endl;
                     }
 
@@ -350,16 +405,14 @@ Stack history;
             }
         }
 
-        else if(choice == 7)
+     else if(choice == 7)
         {
-            if(history.isEmpty())
-            {
-                cout << "Nothing to undo" << endl;
-            }
-            else
+            bool removed = false;
+
+            // Skip old history entries whose requests have already boarded.
+            while(!history.isEmpty() && !removed)
             {
                 Request last = history.pop();
-                bool removed = false;
 
                 for(int i = 0; i < Stop_count; i++)
                 {
@@ -367,24 +420,87 @@ Stack history;
                     {
                         int total = stops[i].getWaitingCount();
 
-                  
-                        if(total > 0 && strcmp(stops[i].getLast().getStudentName(), last.getStudentName()) == 0)
+                        if(total > 0)
                         {
-                            stops[i].removeLast();
-                            removed = true;
+                            Request lastWaiting = stops[i].getLast();
+
+                            // Match stop, student and class-end time.
+                            // This avoids removing another request by mistake.
+                            if(strcmp(lastWaiting.getStudentName(),
+                                      last.getStudentName()) == 0 &&
+                               lastWaiting.getClassEndTime() ==
+                                      last.getClassEndTime())
+                            {
+                                stops[i].removeLast();
+                                removed = true;
+                                cout << "Undo done, request of "
+                                     << last.getStudentName() << " is removed."
+                                     << endl;
+                            }
                         }
+                        break;
                     }
                 }
+            }
 
-                if(removed)
+            if(!removed)
+            {
+                cout << "Nothing to undo. All remaining requests have "
+                     << "already boarded or been removed." << endl;
+            }
+        }
+
+        else if(choice == 8)
+        {
+
+            cout << "Sections saved: " << sectionMap.getCount() << " in " << HASH_SIZE << " slots" << endl;
+            cout << "Collisions while saving: " << sectionMap.getCollisions() << endl;
+
+            if(sectionMap.getLastProbes() == 0)
+            {
+                cout << "Search for a section first (option 2 or 4), then check this again" << endl;
+            }
+            else
+            {
+                cout << "Slots checked in the last search: " << sectionMap.getLastProbes() << endl;
+            }
+        }
+
+          else if(choice == 9)
+        {
+            int stopNumber;
+
+            cout << "Choose the stop:" << endl;
+            for(int i = 0; i < Stop_count; i++)
+            {
+                cout << i + 1 << ". " << stops[i].getName() << endl;
+            }
+            cin >> stopNumber;
+
+            if(stopNumber < 1 || stopNumber > Stop_count)
+            {
+                cout << "Wrong stop number" << endl;
+            }
+            else
+            {
+                int stopId = routeGraph.findStop(stops[stopNumber - 1].getName());
+
+                if(stopId == -1)
                 {
-                    cout << "Undo done, request of " << last.getStudentName() << " is removed" << endl;
+                    cout << "No route data for this stop" << endl;
                 }
                 else
                 {
-                    cout << "Cannot undo, this student already boarded the bus" << endl;
+                    routeGraph.printShortestRoute(universityId, stopId);
                 }
             }
+        }
+
+
+        // ===== NEW: option 10, show the whole network =====
+        else if(choice == 10)
+        {
+            routeGraph.showNetwork();
         }
 
 
