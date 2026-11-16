@@ -1,8 +1,6 @@
 #ifndef REQUESTMANAGER_H
 #define REQUESTMANAGER_H
 
-// RequestManager.h  (Level 3 - On-Demand Request System, "brain")
-// Flow:
 //   1. Student request bhejta hai (class khatam hone ke baad) -> uske stop ki Queue mein
 //   2. Har request student ke apne Undo Stack mein bhi jaati hai
 //   3. processRequests(): Max-Heap se sabse zyada demand wala stop pehle
