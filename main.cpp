@@ -26,7 +26,7 @@ const int MAX_SECTIONS = 100;
 const int Stop_count = 80;
 const int Threshold = 3;
 
-// prints the names of all the stops (no numbers) in 3 columns
+
 void showStopNames(Stop stops[], int count)
 {
     cout << "\nAvailable stops:" << endl;
@@ -50,9 +50,7 @@ void showStopNames(Stop stops[], int count)
     cout << endl;
 }
 
-// asks for a stop NAME (like "miyawala" or "Clock Tower"), upper/lower case does not matter
-// typing ? shows all the stop names
-// returns the position of the stop in the stops array, or -1 if there is no such stop
+
 int askForStop(Stop stops[], int count, const char prompt[])
 {
     char text[40];
